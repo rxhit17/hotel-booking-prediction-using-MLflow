@@ -10,4 +10,4 @@ seaborn
 lightgbm
 mlflow
 google-cloud-storage
-
+flask
