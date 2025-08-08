@@ -1,34 +1,25 @@
-# Updated Dockerfile
+# Use an official Python base image
 FROM python:slim
 
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+ENV GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-key.json
 
-# Set the working directory
+# Set workdir
 WORKDIR /app
 
-# Install system dependencies required by LightGBM
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgomp1 \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+# Copy project files to container
+COPY . .
 
-# Copy all files to the container
-COPY . /app/
+# Install dependencies
+RUN pip install --upgrade pip && \
+    pip install -e .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -e .
+# Copy credentials file separately (see Jenkins stage below)
+COPY gcp-key.json /app/gcp-key.json
 
-# Set Google Application Credentials ENV variable (will be overridden in Jenkins)
-ENV GOOGLE_APPLICATION_CREDENTIALS="/tmp/gcp-key.json"
-
-# Run the training pipeline
-RUN python pipeline/training_pipeline.py
-
-# Expose port
-EXPOSE 5000
-
-# Command to run the application
-CMD ["python", "application.py"]
+# Authenticate with GCP and run training
+RUN apt-get update && apt-get install -y curl gnupg && \
+    curl -sSL https://sdk.cloud.google.com | bash && \
+    /bin/bash -c "source $HOME/google-cloud-sdk/path.bash.inc && \
+    gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS && \
+    python pipeline/training_pipeline.py"
