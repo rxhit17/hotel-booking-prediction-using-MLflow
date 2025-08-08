@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 ENV GOOGLE_APPLICATION_CREDENTIALS="/tmp/gcp-key.json"
 
 # Run the training pipeline
-#RUN python pipeline/training_pipeline.py
+RUN python pipeline/training_pipeline.py
 
 # Expose port
 EXPOSE 5000
