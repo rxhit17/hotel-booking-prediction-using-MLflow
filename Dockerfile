@@ -1,4 +1,4 @@
-# Use a base image with more libs for faster installs
+# syntax=docker/dockerfile:1.4
 FROM python:3.10-bullseye
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -15,20 +15,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy files
+# Copy application code
 COPY . .
 
-# Pass in GCP credentials during build
-ARG GOOGLE_APPLICATION_CREDENTIALS_PATH
-COPY ${GOOGLE_APPLICATION_CREDENTIALS_PATH} /tmp/gcp-key.json
-ENV GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json
-
-# Install Python dependencies with prefer-binary for kiwisolver
+# Install dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --prefer-binary -e .
 
-# Train the model during build (credentials available)
-RUN python pipeline/training_pipeline.py
+# Use BuildKit secret for credentials during training
+RUN --mount=type=secret,id=gcp-key,target=/tmp/gcp-key.json \
+    GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json \
+    python pipeline/training_pipeline.py
 
 EXPOSE 5000
 
