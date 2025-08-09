@@ -1,32 +1,25 @@
-# syntax=docker/dockerfile:1.4
-FROM python:3.10-bullseye
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+FROM python:3.9-slim
 
 WORKDIR /app
 
-# Install system deps for LightGBM + kiwisolver speed
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    g++ \
-    make \
-    libgomp1 \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    gcc g++ make libgomp1 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy application code
+# Copy all project files
 COPY . .
 
-# Install dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --prefer-binary -e .
+# Install Python dependencies
+RUN pip install --upgrade pip && pip install -e .
 
-# Use BuildKit secret for credentials during training
-RUN --mount=type=secret,id=gcp-key,target=/tmp/gcp-key.json \
-    GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json \
-    python pipeline/training_pipeline.py
+# Copy GCP credentials during build
+ARG GOOGLE_APPLICATION_CREDENTIALS_PATH
+COPY ${GOOGLE_APPLICATION_CREDENTIALS_PATH} /tmp/gcp-key.json
+ENV GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json
 
-EXPOSE 5000
+# Run training pipeline during build
+RUN python pipeline/training_pipeline.py
 
-CMD ["python", "application.py"]
+# Set the default command for serving (e.g., Flask API)
+CMD ["python", "app.py"]
