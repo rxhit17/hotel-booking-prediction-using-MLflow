@@ -8,15 +8,17 @@ pipeline {
     }
 
     stages {
-
         stage('Cloning Github repo to Jenkins') {
             steps {
                 script {
                     echo 'Cloning Github repo to Jenkins............'
                     checkout scmGit(
-                        branches: [[name:'*/main']],
+                        branches: [[name: '*/main']],
                         extensions: [],
-                        userRemoteConfigs: [[credentialsId: 'github-token', url: 'https://github.com/rxhit17/hotel-booking-prediction-using-MLflow.git']]
+                        userRemoteConfigs: [[
+                            credentialsId: 'github-token',
+                            url: 'https://github.com/rxhit17/hotel-booking-prediction-using-MLflow.git'
+                        ]]
                     )
                 }
             }
@@ -30,13 +32,13 @@ pipeline {
                     python -m venv ${VENV_DIR}
                     . ${VENV_DIR}/bin/activate
                     pip install --upgrade pip
-                    pip install -e .
+                    pip install --prefer-binary -e .
                     '''
                 }
             }
         }
 
-        stage('Building and Pushing Docker Image to GCR') {
+        stage('Building and Pushing Docker Image to GCR (with credentials)') {
             steps {
                 withCredentials([file(credentialsId: 'gcp-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                     script {
@@ -48,25 +50,12 @@ pipeline {
                         gcloud config set project ${GCP_PROJECT}
                         gcloud auth configure-docker --quiet
 
-                        docker build -t gcr.io/${GCP_PROJECT}/ml-project:latest .
-                        docker push gcr.io/${GCP_PROJECT}/ml-project:latest
-                        '''
-                    }
-                }
-            }
-        }
+                        docker build \
+                            --build-arg GOOGLE_APPLICATION_CREDENTIALS_PATH=/tmp/gcp-key.json \
+                            --secret id=gcp-key,src=${GOOGLE_APPLICATION_CREDENTIALS} \
+                            -t gcr.io/${GCP_PROJECT}/ml-project:latest .
 
-        stage('Run Training Pipeline Inside Container') {
-            steps {
-                withCredentials([file(credentialsId: 'gcp-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                    script {
-                        echo 'Running training pipeline inside container with GCP credentials...'
-                        sh '''
-                        docker run --rm \
-                            -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json \
-                            -v ${GOOGLE_APPLICATION_CREDENTIALS}:/tmp/gcp-key.json:ro \
-                            gcr.io/${GCP_PROJECT}/ml-project:latest \
-                            python pipeline/training_pipeline.py
+                        docker push gcr.io/${GCP_PROJECT}/ml-project:latest
                         '''
                     }
                 }
@@ -77,7 +66,7 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'gcp-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                     script {
-                        echo 'Deploying to Google Cloud Run.............'
+                        echo 'Deploy to Google Cloud Run.............'
                         sh '''
                         export PATH=$PATH:${GCLOUD_PATH}
 
