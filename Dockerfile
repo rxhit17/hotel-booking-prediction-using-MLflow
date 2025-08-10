@@ -1,18 +1,17 @@
+# Example for Python image
 FROM python:3.9-slim
 
-WORKDIR /app
+# Install gcloud
+RUN apt-get update && apt-get install -y curl gnupg \
+    && echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
+       | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list \
+    && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+       | apt-key --keyring /usr/share/keyrings/cloud.google.gpg add - \
+    && apt-get update && apt-get install -y google-cloud-sdk
 
-# Install dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc g++ make libgomp1 \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-
+# Install Python deps
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install -r requirements.txt
 
-# Copy code
-COPY . .
-
-# No training here — only serve app
-CMD ["python", "app.py"]
+COPY . /app
+WORKDIR /app
