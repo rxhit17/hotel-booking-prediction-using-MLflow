@@ -2,33 +2,49 @@ pipeline {
     agent any
 
     environment {
-        PROJECT_ID = "airy-semiotics-465715-j3"
+        GCP_PROJECT_ID = 'airy-semiotics-465715-j3'
         IMAGE_NAME = "ml-training-app"
         IMAGE_TAG = "latest"
-        REGION = "us-central1"
+        IMAGE_URI = "gcr.io/${GCP_PROJECT_ID}/${IMAGE_NAME}:${IMAGE_TAG}"
     }
 
     stages {
-
-        stage('Build Docker Image') {
+        stage('Checkout Code') {
             steps {
-                sh """
-                    docker build -t gcr.io/${PROJECT_ID}/${IMAGE_NAME}:${IMAGE_TAG} .
-                """
+                git credentialsId: 'github-token',
+                    url: 'https://github.com/rxhit17/hotel-booking-prediction-using-MLflow.git',
+                    branch: 'main'
             }
         }
 
-        stage('Run Training Pipeline') {
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    echo "Building Docker image: ${IMAGE_URI}"
+                    sh "docker build -t ${IMAGE_URI} ."
+                }
+            }
+        }
+
+        stage('Train Model in Docker Container') {
             steps {
                 withCredentials([file(credentialsId: 'gcp-key', variable: 'GCP_KEY_FILE')]) {
-                    sh '''
-                        docker run --rm \
-                        -v "$GCP_KEY_FILE":/tmp/gcp-key.json:ro \
-                        -e PYTHONPATH=/app \
-                        -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json \
-                        gcr.io/$PROJECT_ID/$IMAGE_NAME:$IMAGE_TAG \
-                        python pipeline/training_pipeline.py
-                    '''
+                    script {
+                        echo "Running training pipeline inside Docker..."
+                        sh '''
+                            docker run --rm \
+                              -v "$GCP_KEY_FILE":/tmp/gcp-key.json:ro \
+                              -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json \
+                              -e PYTHONPATH=/app \
+                              ${IMAGE_URI} \
+                              sh -c "
+                                gcloud auth activate-service-account --key-file=/tmp/gcp-key.json && \
+                                gcloud config list account && \
+                                gcloud config list project && \
+                                python pipeline/training_pipeline.py
+                              "
+                        '''
+                    }
                 }
             }
         }
@@ -36,25 +52,29 @@ pipeline {
         stage('Push to GCR') {
             steps {
                 withCredentials([file(credentialsId: 'gcp-key', variable: 'GCP_KEY_FILE')]) {
-                    sh '''
-                        gcloud auth activate-service-account --key-file="$GCP_KEY_FILE"
-                        gcloud auth configure-docker gcr.io --quiet
-                        docker push gcr.io/$PROJECT_ID/$IMAGE_NAME:$IMAGE_TAG
-                    '''
+                    script {
+                        echo "Pushing image to Google Container Registry..."
+                        sh '''
+                            gcloud auth activate-service-account --key-file="$GCP_KEY_FILE"
+                            gcloud auth configure-docker gcr.io --quiet
+                            docker push ${IMAGE_URI}
+                        '''
+                    }
                 }
             }
         }
 
         stage('Deploy to Cloud Run') {
             steps {
-                withCredentials([file(credentialsId: 'gcp-key', variable: 'GCP_KEY_FILE')]) {
+                script {
+                    echo "Deploying to Cloud Run..."
                     sh '''
-                        gcloud auth activate-service-account --key-file="$GCP_KEY_FILE"
-                        gcloud run deploy $IMAGE_NAME \
-                            --image gcr.io/$PROJECT_ID/$IMAGE_NAME:$IMAGE_TAG \
-                            --region $REGION \
-                            --platform managed \
-                            --allow-unauthenticated
+                        gcloud run deploy ${IMAGE_NAME} \
+                          --image ${IMAGE_URI} \
+                          --platform managed \
+                          --region asia-south1 \
+                          --allow-unauthenticated \
+                          --project ${GCP_PROJECT_ID}
                     '''
                 }
             }
