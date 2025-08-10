@@ -1,36 +1,48 @@
 pipeline {
     agent any
+
     environment {
-        PROJECT_ID = 'My First Project'       // Replace with your GCP project ID
-        IMAGE_NAME = 'ml-training-app'
-        REGION = 'us-central1'
+        // Change this to your actual GCP project ID from Google Cloud Console
+        GCP_PROJECT_ID = 'my-first-project'
+
+        // Path to your local GCP credentials JSON (use forward slashes)
+        GCP_KEY_FILE = 'C:/Users/HP/Downloads/airy-semiotics-465715-j3-8b0b30f13e6f.json'
+
+        IMAGE_NAME = "ml-training-app"
+        IMAGE_TAG = "latest"
+        IMAGE_URI = "gcr.io/${GCP_PROJECT_ID}/${IMAGE_NAME}:${IMAGE_TAG}"
     }
+
     stages {
+        stage('Checkout Code') {
+            steps {
+                git credentialsId: 'github-token',
+                    url: 'https://github.com/rxhit17/hotel-booking-prediction-using-MLflow.git',
+                    branch: 'main'
+            }
+        }
+
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh """
-                        echo "Building Docker image..."
-                        docker build -t gcr.io/$PROJECT_ID/$IMAGE_NAME:latest .
-                    """
+                    echo "Building Docker image: ${IMAGE_URI}"
+                    sh "docker build -t ${IMAGE_URI} ."
                 }
             }
         }
 
         stage('Train Model in Docker Container') {
             steps {
-                withCredentials([file(credentialsId: 'gcp-key', variable: 'GCP_KEY_FILE')]) {
-                    script {
-                        sh """
-                            echo "Running training pipeline inside container..."
-                            docker run --rm \
-                                -v ${PWD}/keys/gcp-key.json :/tmp/gcp-key.json:ro \
-                                -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json \
-                                -e PYTHONPATH=/app \
-                                gcr.io/$PROJECT_ID/$IMAGE_NAME:latest \
-                                python pipeline/training_pipeline.py
-                        """
-                    }
+                script {
+                    echo "Running training pipeline inside Docker..."
+                    sh """
+                        docker run --rm \
+                          -v "${GCP_KEY_FILE}:/tmp/gcp-key.json:ro" \
+                          -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json \
+                          -e PYTHONPATH=/app \
+                          ${IMAGE_URI} \
+                          python pipeline/training_pipeline.py
+                    """
                 }
             }
         }
@@ -38,10 +50,10 @@ pipeline {
         stage('Push to GCR') {
             steps {
                 script {
-                    sh """
-                        echo "Pushing Docker image to GCR..."
-                        docker push gcr.io/$PROJECT_ID/$IMAGE_NAME:latest
-                    """
+                    echo "Pushing image to Google Container Registry..."
+                    sh "gcloud auth activate-service-account --key-file=${GCP_KEY_FILE}"
+                    sh "gcloud auth configure-docker gcr.io --quiet"
+                    sh "docker push ${IMAGE_URI}"
                 }
             }
         }
@@ -49,13 +61,14 @@ pipeline {
         stage('Deploy to Cloud Run') {
             steps {
                 script {
+                    echo "Deploying to Cloud Run..."
                     sh """
-                        echo "Deploying to Cloud Run..."
-                        gcloud run deploy $IMAGE_NAME \
-                            --image gcr.io/$PROJECT_ID/$IMAGE_NAME:latest \
-                            --region $REGION \
-                            --platform managed \
-                            --allow-unauthenticated
+                        gcloud run deploy ${IMAGE_NAME} \
+                          --image ${IMAGE_URI} \
+                          --platform managed \
+                          --region asia-south1 \
+                          --allow-unauthenticated \
+                          --project ${GCP_PROJECT_ID}
                     """
                 }
             }
