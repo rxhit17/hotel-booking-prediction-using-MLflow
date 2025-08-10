@@ -1,7 +1,7 @@
 pipeline {
     agent any
     environment {
-        PROJECT_ID = 'your-gcp-project-id'       // Replace with your GCP project ID
+        PROJECT_ID = 'My First Project'       // Replace with your GCP project ID
         IMAGE_NAME = 'ml-training-app'
         REGION = 'us-central1'
     }
@@ -24,7 +24,7 @@ pipeline {
                         sh """
                             echo "Running training pipeline inside container..."
                             docker run --rm \
-                                -v \${GCP_KEY_FILE}:/tmp/gcp-key.json:ro \
+                                -v {GCP_KEY_FILE}:/tmp/gcp-key.json:ro \
                                 -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json \
                                 -e PYTHONPATH=/app \
                                 gcr.io/$PROJECT_ID/$IMAGE_NAME:latest \
@@ -62,3 +62,4 @@ pipeline {
         }
     }
 }
+C:\Users\HP\Downloads\airy-semiotics-465715-j3-8b0b30f13e6f.json
