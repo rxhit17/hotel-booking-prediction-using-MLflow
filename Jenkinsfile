@@ -43,7 +43,7 @@ pipeline {
                         echo "Running training pipeline inside Docker..."
                         sh '''
                             docker run --rm \
-                              -v "$GCP_KEY_FILE":/tmp/gcp-key.json:ro \
+                              -v $GCP_KEY_FILE:/tmp/gcp-key.json:ro \
                               -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json \
                               -e PYTHONPATH=/app \
                               ${IMAGE_URI} \
