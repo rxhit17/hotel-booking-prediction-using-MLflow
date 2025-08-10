@@ -62,4 +62,3 @@ pipeline {
         }
     }
 }
-C:\Users\HP\Downloads\airy-semiotics-465715-j3-8b0b30f13e6f.json
