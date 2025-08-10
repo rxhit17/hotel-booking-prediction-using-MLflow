@@ -14,9 +14,9 @@ COPY . .
 RUN pip install --upgrade pip && pip install -e .
 
 # Copy GCP credentials during build
-ARG GOOGLE_APPLICATION_CREDENTIALS_PATH
-COPY ${GOOGLE_APPLICATION_CREDENTIALS_PATH} /tmp/gcp-key.json
-ENV GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json
+#ARG GOOGLE_APPLICATION_CREDENTIALS_PATH
+#COPY ${GOOGLE_APPLICATION_CREDENTIALS_PATH} /tmp/gcp-key.json
+#ENV GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json
 
 # Run training pipeline during build
 RUN python pipeline/training_pipeline.py
