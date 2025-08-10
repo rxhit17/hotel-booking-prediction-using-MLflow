@@ -30,14 +30,13 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'gcp-key', variable: 'GCP_KEY_FILE')]) {
                     script {
-                        // Fail early if the key is not a file
                         sh '''
                             echo "Checking GCP key file..."
                             if [ ! -f "$GCP_KEY_FILE" ]; then
                                 echo "ERROR: GCP_KEY_FILE is not a file"
                                 exit 1
                             fi
-                            file "$GCP_KEY_FILE"
+                            echo "Key file looks good:"
                             head -n 3 "$GCP_KEY_FILE"
                         '''
 
@@ -72,16 +71,19 @@ pipeline {
 
         stage('Deploy to Cloud Run') {
             steps {
-                script {
-                    echo "Deploying to Cloud Run..."
-                    sh """
-                        gcloud run deploy ${IMAGE_NAME} \
-                          --image ${IMAGE_URI} \
-                          --platform managed \
-                          --region asia-south1 \
-                          --allow-unauthenticated \
-                          --project ${GCP_PROJECT_ID}
-                    """
+                withCredentials([file(credentialsId: 'gcp-key', variable: 'GCP_KEY_FILE')]) {
+                    script {
+                        echo "Deploying to Cloud Run..."
+                        sh '''
+                            gcloud auth activate-service-account --key-file="$GCP_KEY_FILE"
+                            gcloud run deploy ${IMAGE_NAME} \
+                              --image ${IMAGE_URI} \
+                              --platform managed \
+                              --region asia-south1 \
+                              --allow-unauthenticated \
+                              --project ${GCP_PROJECT_ID}
+                        '''
+                    }
                 }
             }
         }
