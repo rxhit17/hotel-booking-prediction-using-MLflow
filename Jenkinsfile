@@ -1,7 +1,7 @@
 pipeline {
     agent any
     environment {
-        PROJECT_ID = 'your-gcp-project-id'  // Apna GCP Project ID dal
+        PROJECT_ID = 'your-gcp-project-id'       // Replace with your GCP project ID
         IMAGE_NAME = 'ml-training-app'
         REGION = 'us-central1'
     }
@@ -19,12 +19,12 @@ pipeline {
 
         stage('Train Model in Docker Container') {
             steps {
-                withCredentials([file(credentialsId: 'gcp-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                withCredentials([file(credentialsId: 'gcp-key', variable: 'GCP_KEY_FILE')]) {
                     script {
                         sh """
                             echo "Running training pipeline inside container..."
                             docker run --rm \
-                                -v \${GOOGLE_APPLICATION_CREDENTIALS}:/tmp/gcp-key.json \
+                                -v \${GCP_KEY_FILE}:/tmp/gcp-key.json:ro \
                                 -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json \
                                 -e PYTHONPATH=/app \
                                 gcr.io/$PROJECT_ID/$IMAGE_NAME:latest \
@@ -39,8 +39,7 @@ pipeline {
             steps {
                 script {
                     sh """
-                        echo "Pushing Docker image to Google Container Registry..."
-                        gcloud auth configure-docker --quiet
+                        echo "Pushing Docker image to GCR..."
                         docker push gcr.io/$PROJECT_ID/$IMAGE_NAME:latest
                     """
                 }
@@ -49,20 +48,15 @@ pipeline {
 
         stage('Deploy to Cloud Run') {
             steps {
-                withCredentials([file(credentialsId: 'gcp-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                    script {
-                        sh """
-                            echo "Activating GCP service account..."
-                            gcloud auth activate-service-account --key-file=\${GOOGLE_APPLICATION_CREDENTIALS}
-
-                            echo "Deploying to Cloud Run..."
-                            gcloud run deploy $IMAGE_NAME \
-                                --image gcr.io/$PROJECT_ID/$IMAGE_NAME:latest \
-                                --region $REGION \
-                                --platform managed \
-                                --allow-unauthenticated
-                        """
-                    }
+                script {
+                    sh """
+                        echo "Deploying to Cloud Run..."
+                        gcloud run deploy $IMAGE_NAME \
+                            --image gcr.io/$PROJECT_ID/$IMAGE_NAME:latest \
+                            --region $REGION \
+                            --platform managed \
+                            --allow-unauthenticated
+                    """
                 }
             }
         }
